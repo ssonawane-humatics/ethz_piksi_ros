@@ -21,6 +21,8 @@ from piksi_rtk_msgs.msg import (AgeOfCorrections, BaselineEcef, BaselineHeading,
 from piksi_rtk_msgs.srv import *
 from geometry_msgs.msg import (PoseWithCovarianceStamped, PointStamped, PoseWithCovariance, Point, TransformStamped,
                                Transform)
+
+from nav_msgs.msg import Odometry
 # Import Piksi SBP library
 from sbp.client.drivers.pyserial_driver import PySerialDriver
 from sbp.client.drivers.network_drivers import TCPDriver
@@ -128,9 +130,9 @@ class PiksiMulti:
 
         # Navsatfix settings.
         self.var_spp = rospy.get_param('~var_spp', [25.0, 25.0, 64.0])
-        self.var_rtk_float = rospy.get_param('~var_rtk_float', [25.0, 25.0, 64.0])
+        self.var_rtk_float = rospy.get_param('~var_rtk_float', [0.25, 0.25, 1.0])
         self.var_rtk_fix = rospy.get_param('~var_rtk_fix', [0.0049, 0.0049, 0.01])
-        self.var_spp_sbas = rospy.get_param('~var_spp_sbas', [1.0, 1.0, 1.0])
+        self.var_spp_sbas = rospy.get_param('~var_spp_sbas', [1.0, 1.0, 2.0])
         self.navsatfix_frame_id = rospy.get_param('~navsatfix_frame_id', 'gps')
 
         # Local ENU frame settings.
@@ -144,6 +146,7 @@ class PiksiMulti:
         self.ecef_to_ned_matrix = np.eye(3)
         self.enu_frame_id = rospy.get_param('~enu_frame_id', 'enu')
         self.transform_child_frame_id = rospy.get_param('~transform_child_frame_id', 'gps_receiver')
+
 
         if rospy.has_param('~latitude0_deg') and rospy.has_param('~longitude0_deg') and rospy.has_param(
                 '~altitude0'):
@@ -346,6 +349,9 @@ class PiksiMulti:
                                                            AgeOfCorrections, queue_size=10)
         publishers['enu_pose_best_fix'] = rospy.Publisher(rospy.get_name() + '/enu_pose_best_fix',
                                                           PoseWithCovarianceStamped, queue_size=10)
+
+        publishers['odom_covariance'] = rospy.Publisher(rospy.get_name() + '/odom_covariance',
+                                                 Odometry, queue_size=10)
 
         # Raw IMU and Magnetometer measurements.
         if self.publish_raw_imu_and_mag:
@@ -686,24 +692,24 @@ class PiksiMulti:
                                  self.publishers['spp'],
                                  self.publishers['enu_pose_spp'], self.publishers['enu_point_spp'],
                                  self.publishers['enu_transform_spp'], self.publishers['best_fix'],
-                                 self.publishers['enu_pose_best_fix'])
+                                 self.publishers['enu_pose_best_fix'], self.publishers['odom_covariance'])
 
     def publish_rtk_float(self, latitude, longitude, height):
         self.publish_wgs84_point(latitude, longitude, height, self.var_rtk_float, NavSatStatus.STATUS_GBAS_FIX,
                                  self.publishers['rtk_float'],
                                  self.publishers['enu_pose_float'], self.publishers['enu_point_float'],
                                  self.publishers['enu_transform_float'], self.publishers['best_fix'],
-                                 self.publishers['enu_pose_best_fix'])
+                                 self.publishers['enu_pose_best_fix'], self.publishers['odom_covariance'])
 
     def publish_rtk_fix(self, latitude, longitude, height):
         self.publish_wgs84_point(latitude, longitude, height, self.var_rtk_fix, NavSatStatus.STATUS_GBAS_FIX,
                                  self.publishers['rtk_fix'],
                                  self.publishers['enu_pose_fix'], self.publishers['enu_point_fix'],
                                  self.publishers['enu_transform_fix'], self.publishers['best_fix'],
-                                 self.publishers['enu_pose_best_fix'])
+                                 self.publishers['enu_pose_best_fix'], self.publishers['odom_covariance'])
 
     def publish_wgs84_point(self, latitude, longitude, height, variance, navsat_status, pub_navsatfix, pub_pose,
-                            pub_point, pub_transform, pub_navsatfix_best_pose, pub_pose_best_fix):
+                            pub_point, pub_transform, pub_navsatfix_best_pose, pub_pose_best_fix, pub_odometry):
         # Navsatfix message.
         navsatfix_msg = NavSatFix()
         navsatfix_msg.header.stamp = rospy.Time.now()
@@ -739,6 +745,13 @@ class PiksiMulti:
         transform_msg.child_frame_id = self.transform_child_frame_id
         transform_msg.transform = self.enu_to_transform_msg(east, north, up)
 
+        # Odometry message
+        odometry_msg = Odometry()
+        odometry_msg.header.stamp = navsatfix_msg.header.stamp
+        odometry_msg.header.frame_id = self.enu_frame_id
+        odometry_msg.child_frame_id = self.transform_child_frame_id
+        odometry_msg.pose = self.enu_to_pose_msg(east, north, up, variance)
+
         # Publish.
         pub_navsatfix.publish(navsatfix_msg)
         pub_pose.publish(pose_msg)
@@ -746,6 +759,7 @@ class PiksiMulti:
         pub_transform.publish(transform_msg)
         pub_navsatfix_best_pose.publish(navsatfix_msg)
         pub_pose_best_fix.publish(pose_msg)
+        pub_odometry.publish(odometry_msg)
 
     def cb_sbp_heartbeat(self, msg_raw, **metadata):
         msg = MsgHeartbeat(msg_raw)
