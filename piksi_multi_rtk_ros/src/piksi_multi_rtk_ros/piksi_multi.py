@@ -129,10 +129,11 @@ class PiksiMulti:
         self.multicast_recv = []
 
         # Navsatfix settings.
-        self.var_spp = rospy.get_param('~var_spp', [25.0, 25.0, 64.0])
-        self.var_rtk_float = rospy.get_param('~var_rtk_float', [0.25, 0.25, 1.0])
-        self.var_rtk_fix = rospy.get_param('~var_rtk_fix', [0.0049, 0.0049, 0.01])
-        self.var_spp_sbas = rospy.get_param('~var_spp_sbas', [1.0, 1.0, 2.0])
+        self.stdev_spp = rospy.get_param('~stdev_spp', [2.0, 2.0, 5.0])
+        self.stdev_spp_sbas = rospy.get_param('~stdev_spp_sbas', [1.0, 1.0, 2.0])
+        self.stdev_rtk_float = rospy.get_param('~stdev_rtk_float', [0.5, 0.5, 1.0])
+        self.stdev_rtk_fix = rospy.get_param('~stdev_rtk_fix', [0.07, 0.07, 0.12])
+
         self.navsatfix_frame_id = rospy.get_param('~navsatfix_frame_id', 'gps')
 
         # Local ENU frame settings.
@@ -630,7 +631,7 @@ class PiksiMulti:
             return
         # SPP GPS messages.
         elif msg.flags == PosLlhMulti.FIX_MODE_SPP:
-            self.publish_spp(msg.lat, msg.lon, msg.height, self.var_spp, NavSatStatus.STATUS_FIX)
+            self.publish_spp(msg.lat, msg.lon, msg.height, self.stdev_spp, NavSatStatus.STATUS_FIX)
         # Differential GNSS (DGNSS)
         elif msg.flags == PosLlhMulti.FIX_MODE_DGNSS:
             rospy.logwarn(
@@ -657,7 +658,7 @@ class PiksiMulti:
             return
         # SBAS Position
         elif msg.flags == PosLlhMulti.FIX_MODE_SBAS:
-            self.publish_spp(msg.lat, msg.lon, msg.height, self.var_spp_sbas, NavSatStatus.STATUS_SBAS_FIX)
+            self.publish_spp(msg.lat, msg.lon, msg.height, self.stdev_spp_sbas, NavSatStatus.STATUS_SBAS_FIX)
         else:
             rospy.logerr(
                 "[cb_sbp_pos_llh]: Unknown case, you found a bug!" +
@@ -687,28 +688,28 @@ class PiksiMulti:
 
         self.publish_receiver_state_msg()
 
-    def publish_spp(self, latitude, longitude, height, variance, navsatstatus_fix):
-        self.publish_wgs84_point(latitude, longitude, height, variance, navsatstatus_fix,
+    def publish_spp(self, latitude, longitude, height, stdev, navsatstatus_fix):
+        self.publish_wgs84_point(latitude, longitude, height, stdev, navsatstatus_fix,
                                  self.publishers['spp'],
                                  self.publishers['enu_pose_spp'], self.publishers['enu_point_spp'],
                                  self.publishers['enu_transform_spp'], self.publishers['best_fix'],
                                  self.publishers['enu_pose_best_fix'], self.publishers['odom_covariance'])
 
     def publish_rtk_float(self, latitude, longitude, height):
-        self.publish_wgs84_point(latitude, longitude, height, self.var_rtk_float, NavSatStatus.STATUS_GBAS_FIX,
+        self.publish_wgs84_point(latitude, longitude, height, self.stdev_rtk_float, NavSatStatus.STATUS_GBAS_FIX,
                                  self.publishers['rtk_float'],
                                  self.publishers['enu_pose_float'], self.publishers['enu_point_float'],
                                  self.publishers['enu_transform_float'], self.publishers['best_fix'],
                                  self.publishers['enu_pose_best_fix'], self.publishers['odom_covariance'])
 
     def publish_rtk_fix(self, latitude, longitude, height):
-        self.publish_wgs84_point(latitude, longitude, height, self.var_rtk_fix, NavSatStatus.STATUS_GBAS_FIX,
+        self.publish_wgs84_point(latitude, longitude, height, self.stdev_rtk_fix, NavSatStatus.STATUS_GBAS_FIX,
                                  self.publishers['rtk_fix'],
                                  self.publishers['enu_pose_fix'], self.publishers['enu_point_fix'],
                                  self.publishers['enu_transform_fix'], self.publishers['best_fix'],
                                  self.publishers['enu_pose_best_fix'], self.publishers['odom_covariance'])
 
-    def publish_wgs84_point(self, latitude, longitude, height, variance, navsat_status, pub_navsatfix, pub_pose,
+    def publish_wgs84_point(self, latitude, longitude, height, stdev, navsat_status, pub_navsatfix, pub_pose,
                             pub_point, pub_transform, pub_navsatfix_best_pose, pub_pose_best_fix, pub_odometry):
         # Navsatfix message.
         navsatfix_msg = NavSatFix()
@@ -720,9 +721,9 @@ class PiksiMulti:
         navsatfix_msg.longitude = longitude
         navsatfix_msg.altitude = height
         navsatfix_msg.status.status = navsat_status
-        navsatfix_msg.position_covariance = [variance[0], 0, 0,
-                                             0, variance[1], 0,
-                                             0, 0, variance[2]]
+        navsatfix_msg.position_covariance = [stdev[0]**2, 0, 0,
+                                             0, stdev[1]**2, 0,
+                                             0, 0, stdev[2]**2]
         # Local Enu coordinate.
         (east, north, up) = self.geodetic_to_enu(latitude, longitude, height)
 
@@ -730,7 +731,7 @@ class PiksiMulti:
         pose_msg = PoseWithCovarianceStamped()
         pose_msg.header.stamp = navsatfix_msg.header.stamp
         pose_msg.header.frame_id = self.enu_frame_id
-        pose_msg.pose = self.enu_to_pose_msg(east, north, up, variance)
+        pose_msg.pose = self.enu_to_pose_msg(east, north, up, stdev)
 
         # Point message.
         point_msg = PointStamped()
@@ -750,7 +751,7 @@ class PiksiMulti:
         odometry_msg.header.stamp = navsatfix_msg.header.stamp
         odometry_msg.header.frame_id = self.enu_frame_id
         odometry_msg.child_frame_id = self.transform_child_frame_id
-        odometry_msg.pose = self.enu_to_pose_msg(east, north, up, variance)
+        odometry_msg.pose = self.enu_to_pose_msg(east, north, up, stdev)
 
         # Publish.
         pub_navsatfix.publish(navsatfix_msg)
@@ -953,13 +954,13 @@ class PiksiMulti:
 
         return ret
 
-    def enu_to_pose_msg(self, east, north, up, variance):
+    def enu_to_pose_msg(self, east, north, up, stdev):
         pose_msg = PoseWithCovariance()
 
         # Fill covariance using variance parameter of GPS.
-        pose_msg.covariance[6 * 0 + 0] = variance[0]
-        pose_msg.covariance[6 * 1 + 1] = variance[1]
-        pose_msg.covariance[6 * 2 + 2] = variance[2]
+        pose_msg.covariance[6 * 0 + 0] = stdev[0]**2
+        pose_msg.covariance[6 * 1 + 1] = stdev[1]**2
+        pose_msg.covariance[6 * 2 + 2] = stdev[2]**2
 
         # Fill pose section.
         pose_msg.pose.position.x = east
