@@ -1,5 +1,6 @@
 */.idea/*
 .idea/*
+.vscode/*
 utils/bags/*
 src/*.pyc
 */cmake-build-debug

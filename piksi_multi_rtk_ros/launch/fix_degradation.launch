@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+
+<launch>
+
+<node name="fix_degradation_node" pkg="piksi_multi_rtk_ros" type="gnss_fix_degradation" output="screen" >
+    <remap from="enu_pose_fix" to="piksi_node/enu_pose_fix" />
+  </node>
+
+</launch>

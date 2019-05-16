@@ -1,0 +1,3 @@
+int8 degradation_level
+---
+bool success

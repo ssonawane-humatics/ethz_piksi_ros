@@ -962,6 +962,11 @@ class PiksiMulti:
         pose_msg.covariance[6 * 1 + 1] = stdev[1]**2
         pose_msg.covariance[6 * 2 + 2] = stdev[2]**2
 
+        # Fill covariance for attitude for so that not zero
+        pose_msg.covariance[6 * 3 + 3] = 1
+        pose_msg.covariance[6 * 4 + 4] = 1
+        pose_msg.covariance[6 * 5 + 5] = 1
+
         # Fill pose section.
         pose_msg.pose.position.x = east
         pose_msg.pose.position.y = north

@@ -1,0 +1,6 @@
+#! /usr/bin/env python
+
+from  piksi_multi_rtk_ros import GNSSFixDegradation
+
+if __name__ == '__main__':
+    gnss_fix_degradation = GNSSFixDegradation()
