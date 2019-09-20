@@ -1,5 +1,9 @@
 */.idea/*
 .idea/*
+<<<<<<< HEAD
+=======
+*/.vscode/*
+>>>>>>> feature/sbp_v2.6.3
 .vscode/*
 utils/bags/*
 src/*.pyc
@@ -20,4 +24,11 @@ geodetic_survey_bags/*.bag
 
 # KML files.
 /kml/*
+
+# Kernel modules
+*.ko*
+*.mod*
+*.o*
+*.symvers
+*.order
 

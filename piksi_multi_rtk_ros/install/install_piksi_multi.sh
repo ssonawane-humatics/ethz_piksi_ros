@@ -1,7 +1,7 @@
 #!/bin/bash
 
 GIT_REPO_LIBSBP=https://github.com/swift-nav/libsbp.git
-REPO_TAG=v2.4.1 #version you want to checkout before installing
+REPO_TAG=v2.6.3 #version you want to checkout before installing
 
 # Sort of reg express used to see if there is another verision on SBP library already installed
 # Adapted from https://stackoverflow.com/questions/6363441/check-if-a-file-exists-with-wildcard-in-shell-script
@@ -41,13 +41,17 @@ cd ./python
 echo "Installing SBP dependencies."
 sudo apt-get install pandoc
 sudo apt-get install python-pip
-sudo pip install tox
-sudo pip install -r requirements.txt
-sudo pip install markupsafe
+pip install --user tox
+pip install --user numba
+pip install --user -r requirements.txt
+pip install --user markupsafe
+pip install --user numpy-quaternion
+pip install --user pyproj
+pip install --user scipy
 sudo python setup.py install
 # Build package.
 cd ..
-sudo make python
+make python
 
 # Remove temporary folder
 cd $STARTING_FOLDER
