@@ -147,11 +147,11 @@ class PiksiMulti:
         self.multicast_recv = []
 
         # Navsatfix settings.
-        self.stdev_spp = rospy.get_param('~stdev_spp', [2.0, 2.0, 5.0])
-        self.stdev_spp_sbas = rospy.get_param('~stdev_spp_sbas', [1.0, 1.0, 2.0])
-        self.stdev_rtk_float = rospy.get_param('~stdev_rtk_float', [0.5, 0.5, 1.0])
-        self.stdev_rtk_fix = rospy.get_param('~stdev_rtk_fix', [0.07, 0.07, 0.12])
-
+        # Navsatfix settings.
+        self.var_spp = rospy.get_param('~var_spp', [25.0, 25.0, 64.0])
+        self.var_rtk_float = rospy.get_param('~var_rtk_float', [25.0, 25.0, 64.0])
+        self.var_rtk_fix = rospy.get_param('~var_rtk_fix', [0.0049, 0.0049, 0.01])
+        self.var_spp_sbas = rospy.get_param('~var_spp_sbas', [1.0, 1.0, 1.0])
         self.navsatfix_frame_id = rospy.get_param('~navsatfix_frame_id', 'gps')
 
         # Covariance topic settings.
@@ -355,7 +355,7 @@ class PiksiMulti:
             publishers['vel_ned_cov'] = rospy.Publisher(rospy.get_name() + '/vel_ned_cov', VelocityWithCovarianceStamped, queue_size=10)
             publishers['vel_ecef_cov'] = rospy.Publisher(rospy.get_name() + '/vel_ecef_cov', VelocityWithCovarianceStamped, queue_size=10)
             publishers['baseline_ned_cov'] = rospy.Publisher(rospy.get_name() + '/baseline_ned_cov', PositionWithCovarianceStamped, queue_size=10)
-            publishers['odom_ecef_cov'] rospy.Publisher(rospy.get_name() + '/odom_ecef_cov', Odometry, queue_size=10)
+            publishers['odom_ecef_cov'] = rospy.Publisher(rospy.get_name() + '/odom_ecef_cov', Odometry, queue_size=10)
             publishers['pos_ecef_cov_viz'] = rospy.Publisher(rospy.get_name() + '/pos_ecef_cov_viz', Marker, queue_size=10)
             publishers['baseline_ned_cov_viz'] = rospy.Publisher(rospy.get_name() + '/baseline_ned_cov_viz', Marker, queue_size=10)
 
@@ -965,7 +965,7 @@ class PiksiMulti:
                                         msg.cov_x_z, msg.cov_y_z, msg.cov_z_z, 0.0, 0.0, 0.0,
                                         0.0,         0.0,         0.0,         1.0, 0.0, 0.0,
                                         0.0,         0.0,         0.0,         0.0, 1.0, 0.0,
-                                        0.0,         0.0,         0.0,         0.0, 0.0, 1.0,]
+                                        0.0,         0.0,         0.0,         0.0, 0.0, 1.0]
             
             self.publishers['odom_ecef_cov'].publish(odom_msg)
 
@@ -1060,21 +1060,21 @@ class PiksiMulti:
                                  self.publishers['spp'],
                                  self.publishers['enu_pose_spp'], self.publishers['enu_point_spp'],
                                  self.publishers['enu_transform_spp'], self.publishers['best_fix'],
-                                 self.publishers['enu_pose_best_fix'], self.publishers['odom_covariance'])
+                                 self.publishers['enu_pose_best_fix'] )
 
     def publish_rtk_float(self, latitude, longitude, height, stamp, variance):
         self.publish_wgs84_point(latitude, longitude, height, stamp, variance, NavSatStatus.STATUS_GBAS_FIX,
                                  self.publishers['rtk_float'],
                                  self.publishers['enu_pose_float'], self.publishers['enu_point_float'],
                                  self.publishers['enu_transform_float'], self.publishers['best_fix'],
-                                 self.publishers['enu_pose_best_fix'], self.publishers['odom_covariance'])
+                                 self.publishers['enu_pose_best_fix'])
 
     def publish_rtk_fix(self, latitude, longitude, height, stamp, variance):
         self.publish_wgs84_point(latitude, longitude, height, stamp, variance, NavSatStatus.STATUS_GBAS_FIX,
                                  self.publishers['rtk_fix'],
                                  self.publishers['enu_pose_fix'], self.publishers['enu_point_fix'],
                                  self.publishers['enu_transform_fix'], self.publishers['best_fix'],
-                                 self.publishers['enu_pose_best_fix'], self.publishers['odom_covariance'])
+                                 self.publishers['enu_pose_best_fix'])
 
     def publish_wgs84_point(self, latitude, longitude, height, stamp, variance, navsat_status, pub_navsatfix, pub_pose,
                             pub_point, pub_transform, pub_navsatfix_best_pose, pub_pose_best_fix):
@@ -1088,9 +1088,7 @@ class PiksiMulti:
         navsatfix_msg.longitude = longitude
         navsatfix_msg.altitude = height
         navsatfix_msg.status.status = navsat_status
-        navsatfix_msg.position_covariance = [stdev[0]**2, 0, 0,
-                                             0, stdev[1]**2, 0,
-                                             0, 0, stdev[2]**2]
+        
         # Local Enu coordinate.
         (east, north, up) = self.geodetic_to_enu(latitude, longitude, height)
 
@@ -1098,7 +1096,7 @@ class PiksiMulti:
         pose_msg = PoseWithCovarianceStamped()
         pose_msg.header.stamp = navsatfix_msg.header.stamp
         pose_msg.header.frame_id = self.enu_frame_id
-        pose_msg.pose = self.enu_to_pose_msg(east, north, up, stdev)
+        pose_msg.pose = self.enu_to_pose_msg(east, north, up, variance)
 
         # Point message.
         point_msg = PointStamped()
@@ -1114,11 +1112,11 @@ class PiksiMulti:
         transform_msg.transform = self.enu_to_transform_msg(east, north, up)
 
         # Odometry message
-        odometry_msg = Odometry()
-        odometry_msg.header.stamp = navsatfix_msg.header.stamp
-        odometry_msg.header.frame_id = self.enu_frame_id
-        odometry_msg.child_frame_id = self.transform_child_frame_id
-        odometry_msg.pose = self.enu_to_pose_msg(east, north, up, stdev)
+        #odometry_msg = Odometry()
+        #odometry_msg.header.stamp = navsatfix_msg.header.stamp
+        #odometry_msg.header.frame_id = self.enu_frame_id
+        #odometry_msg.child_frame_id = self.transform_child_frame_id
+        #odometry_msg.pose = self.enu_to_pose_msg(east, north, up, variance)
 
         # Publish.
         pub_navsatfix.publish(navsatfix_msg)
@@ -1127,7 +1125,7 @@ class PiksiMulti:
         pub_transform.publish(transform_msg)
         pub_navsatfix_best_pose.publish(navsatfix_msg)
         pub_pose_best_fix.publish(pose_msg)
-        pub_odometry.publish(odometry_msg)
+        #pub_odometry.publish(odometry_msg)
 
     def cb_sbp_heartbeat(self, msg_raw, **metadata):
         msg = MsgHeartbeat(msg_raw)
@@ -1323,13 +1321,13 @@ class PiksiMulti:
 
         return ret
 
-    def enu_to_pose_msg(self, east, north, up, stdev):
+    def enu_to_pose_msg(self, east, north, up, variance):
         pose_msg = PoseWithCovariance()
 
         # Fill covariance using variance parameter of GPS.
-        pose_msg.covariance[6 * 0 + 0] = stdev[0]**2
-        pose_msg.covariance[6 * 1 + 1] = stdev[1]**2
-        pose_msg.covariance[6 * 2 + 2] = stdev[2]**2
+        pose_msg.covariance[6 * 0 + 0] = variance[0]
+        pose_msg.covariance[6 * 1 + 1] = variance[1]
+        pose_msg.covariance[6 * 2 + 2] = variance[2]
 
         # Fill covariance for attitude for so that not zero
         pose_msg.covariance[6 * 3 + 3] = 1
