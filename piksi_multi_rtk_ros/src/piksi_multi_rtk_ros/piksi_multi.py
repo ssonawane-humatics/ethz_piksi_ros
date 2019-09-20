@@ -355,7 +355,7 @@ class PiksiMulti:
             publishers['vel_ned_cov'] = rospy.Publisher(rospy.get_name() + '/vel_ned_cov', VelocityWithCovarianceStamped, queue_size=10)
             publishers['vel_ecef_cov'] = rospy.Publisher(rospy.get_name() + '/vel_ecef_cov', VelocityWithCovarianceStamped, queue_size=10)
             publishers['baseline_ned_cov'] = rospy.Publisher(rospy.get_name() + '/baseline_ned_cov', PositionWithCovarianceStamped, queue_size=10)
-
+            publishers['odom_ecef_cov'] rospy.Publisher(rospy.get_name() + '/odom_ecef_cov', Odometry, queue_size=10)
             publishers['pos_ecef_cov_viz'] = rospy.Publisher(rospy.get_name() + '/pos_ecef_cov_viz', Marker, queue_size=10)
             publishers['baseline_ned_cov_viz'] = rospy.Publisher(rospy.get_name() + '/baseline_ned_cov_viz', Marker, queue_size=10)
 
@@ -951,6 +951,23 @@ class PiksiMulti:
             ecef_msg.position.covariance = [msg.cov_x_x, msg.cov_x_y, msg.cov_x_z,
                                             msg.cov_x_y, msg.cov_y_y, msg.cov_y_z,
                                             msg.cov_x_z, msg.cov_y_z, msg.cov_z_z]
+
+            odom_msg = Odometry()
+            odom_msg.header.stamp = stamp
+            odom_msg.header.frame_id = self.ecef_frame
+
+            odom_msg.pose.pose.position.x = msg.x
+            odom_msg.pose.pose.position.y = msg.y
+            odom_msg.pose.pose.position.z = msg.z
+
+            odom_msg.pose.covariance = [msg.cov_x_x, msg.cov_x_y, msg.cov_x_z, 0.0, 0.0, 0.0,
+                                        msg.cov_x_y, msg.cov_y_y, msg.cov_y_z, 0.0, 0.0, 0.0,
+                                        msg.cov_x_z, msg.cov_y_z, msg.cov_z_z, 0.0, 0.0, 0.0,
+                                        0.0,         0.0,         0.0,         1.0, 0.0, 0.0,
+                                        0.0,         0.0,         0.0,         0.0, 1.0, 0.0,
+                                        0.0,         0.0,         0.0,         0.0, 0.0, 1.0,]
+            
+            self.publishers['odom_ecef_cov'].publish(odom_msg)
 
             self.publishers['pos_ecef_cov'].publish(ecef_msg)
 
