@@ -951,7 +951,10 @@ class PiksiMulti:
             ecef_msg.position.covariance = [msg.cov_x_x, msg.cov_x_y, msg.cov_x_z,
                                             msg.cov_x_y, msg.cov_y_y, msg.cov_y_z,
                                             msg.cov_x_z, msg.cov_y_z, msg.cov_z_z]
+            
+            self.publishers['pos_ecef_cov'].publish(ecef_msg)
 
+        if self.publishers['odom_ecef_cov'].get_num_connections() > 0:
             odom_msg = Odometry()
             odom_msg.header.stamp = stamp
             odom_msg.header.frame_id = self.ecef_frame
@@ -968,9 +971,7 @@ class PiksiMulti:
                                         0.0,         0.0,         0.0,         0.0, 0.0, 1.0]
             
             self.publishers['odom_ecef_cov'].publish(odom_msg)
-
-            self.publishers['pos_ecef_cov'].publish(ecef_msg)
-
+                
         if self.publishers['pos_ecef_cov_viz'].get_num_connections() > 0:
             # https://answers.ros.org/question/11081/plot-a-gaussian-3d-representation-with-markers-in-rviz/
             marker = Marker()
